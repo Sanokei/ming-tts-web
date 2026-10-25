@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": ".",
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "allowImportingTsExtensions": true,
+    "types": [
+      "bun",
+      "node"
+    ]
+  },
+  "include": [
+    "src",
+    "tests"
+  ]
+}
