@@ -25,8 +25,8 @@
 // ORT sessions requires the Step 3–4 wiring (host weights from host.npz /
 // embed.npy + tokenizer.json + the 7 exported ONNX graphs), which is gated
 // on the Step 2 WebGPU benchmark (see notes/STEP2-GATE-PROTOCOL.md).
-// generate() with an injected engine runs today; generate() without an
-// engine or weights throws ModelNotLoadedError — it never fakes audio.
+// generate() with an injected engine runs today; from_pretrained() without
+// an engine throws ModelNotLoadedError before attempting any downloads.
 
 import { resample } from './audio.js';
 import { buildTaskGenerationKwargs, buildTtsPrompt, type StructuredControls } from './instructions.js';
@@ -35,6 +35,7 @@ import { prepareText } from './segment.js';
 import { ModelNotLoadedError, type Device, type Dtype, type SessionFactory } from './sessions.js';
 import type { ProgressCallback } from './cache.js';
 import { CLONING_CONSENT_NOTICE, DEFAULT_VOICE, listVoices, resolveVoice } from './voices.js';
+import {mingReadiness} from './readiness.js';
 
 export const SAMPLING_RATE = 44100;
 export const MODEL_ID = 'inclusionAI/Ming-3.0-tts-0.5B';
@@ -243,10 +244,9 @@ export class MingTTS {
     this.progressCallback = progressCallback;
   }
 
-  /**
-   * Lazy load: onnxruntime-web is imported only inside from_pretrained
-   * (via sessions.loadOrtWeb) when no engine/factory is injected — never
-   * at module import time. tts-tiny is refused outright (0.5B ONLY).
+  /** Require a caller-provided fragment engine. No built-in weights are loaded.
+   * A SessionFactory alone cannot supply the unfinished host engine.
+   * tts-tiny is refused outright (0.5B ONLY).
    */
   static async from_pretrained(
     modelId: string,
@@ -259,20 +259,9 @@ export class MingTTS {
     }
     const device = options.device ?? 'webgpu';
     const dtype = options.dtype ?? (device === 'webgpu' ? 'fp16' : 'int8');
+    if (!mingReadiness(options).ready) throw new ModelNotLoadedError();
     options.progress_callback?.({ status: 'loading', file: modelId });
-    if (options.engine) {
-      return new MingTTS(modelId, device, dtype, options.engine, options.progress_callback);
-    }
-    if (options.sessionFactory) {
-      // Sessions are lazy (GraphSessions), but the real engine wiring
-      // (host weights + tokenizer) is Step 3–4 work, gated on Step 2.
-      // Until then, a factory alone is not enough to synthesize.
-      return new MingTTS(modelId, device, dtype, null, options.progress_callback);
-    }
-    // No engine, no factory: do not attempt a silent ORT import that may
-    // throw at import time in the host env. The caller gets a clear error
-    // at generate() time, and can inject an engine/factory instead.
-    return new MingTTS(modelId, device, dtype, null, options.progress_callback);
+    return new MingTTS(modelId, device, dtype, options.engine!, options.progress_callback);
   }
 
   list_voices(): string[] {

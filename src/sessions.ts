@@ -52,7 +52,7 @@ export function defaultModelPaths(baseUrl: string, dtype: Dtype): ModelPaths {
 }
 
 export class ModelNotLoadedError extends Error {
-  constructor(message = 'MingTTS: no ORT sessions are loaded. Call from_pretrained() with a SessionFactory (or install onnxruntime-web) before generate().') {
+  constructor(message = 'MingTTS is not ready for built-in synthesis: the real fragment engine and end-to-end gate are incomplete. Supply a verified FragmentEngine through options.engine. Installing ONNX Runtime or supplying a SessionFactory is not sufficient. For a working browser TTS path, see https://github.com/hexgrad/kokoro/tree/main/kokoro.js .') {
     super(message);
     this.name = 'ModelNotLoadedError';
   }
