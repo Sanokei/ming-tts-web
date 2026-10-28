@@ -1,5 +1,29 @@
 # ming-tts-web — Ming-3.0-tts-0.5B in the browser
 
+**Integration status: experimental host library, not a working built-in speech synthesizer.**
+`MingTTS.from_pretrained()` now rejects immediately unless a `FragmentEngine`
+is supplied. A successful package install, an ONNX session factory, or a model
+URL must never be reported as "speech ready". Check `mingReadiness()` before
+showing a speech control. Readiness of an injected engine does not certify its
+audio quality.
+
+For a working browser TTS option today, use the public
+[Kokoro JavaScript package](https://github.com/hexgrad/kokoro/tree/main/kokoro.js):
+
+```ts
+import { KokoroTTS } from 'kokoro-js';
+const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+  dtype: 'q8', device: 'wasm',
+});
+const audio = await tts.generate('Flight display ready.', { voice: 'af_heart' });
+// Kokoro returns 24 kHz audio. Keep audio.sampling_rate; do not label it Ming.
+```
+
+This is an explicit alternative, with a separate package and model download;
+the Ming API does not silently switch providers. Verify real synthesis on the
+target device before enabling it for a user. Upsampling is not learned audio
+super-resolution.
+
 > **Status (2026-10-25): Step 1 CLOSED, Step 2 GATE NOT RUN, no real
 > synthesis verified yet.** This package contains the TypeScript glue
 > (host loop, audio frontends, task contracts, kokoro-js-shaped API) with
@@ -12,14 +36,20 @@
 **Scope: `inclusionAI/Ming-3.0-tts-0.5B` ONLY. Never tts-tiny.**
 `from_pretrained` refuses any model id containing "tiny".
 
-## Quick start (API shape — mirrors kokoro-js)
+## Injected-engine API (not a built-in synthesis quick start)
 
 ```ts
-import { MingTTS } from 'ming-tts-web';
+import { MingTTS, mingReadiness, type FragmentEngine } from 'ming-tts-web';
+
+// This project does not yet provide a real fragment engine. Supply and verify
+// your own engine before using this API. Omitting it rejects immediately.
+declare const verifiedEngine: FragmentEngine;
+if (!mingReadiness({ engine: verifiedEngine }).ready) throw new Error('Engine unavailable');
 
 const tts = await MingTTS.from_pretrained('inclusionAI/Ming-3.0-tts-0.5B', {
   device: 'webgpu',
   dtype: 'fp16',
+  engine: verifiedEngine,
   progress_callback: (p) => console.log(p.status, p.progress),
 });
 const out = await tts.generate('Hello, this is a test.', { voice: 'US_Emma', speed: 1 });
@@ -58,10 +88,9 @@ for await (const part of tts.stream(text)) { /* per-fragment audio */ }
 - **Zero-speaker is NEVER the default.** No-voice calls use US_Emma (IP).
   Zero-speaker English is weak in the original checkpoint and varies with
   the noise draw (0.39 cosine between runs, per the MNN README).
-- **Lazy load.** `onnxruntime-web` is imported only inside
-  `from_pretrained` (via `sessions.loadOrtWeb`), never at module import —
-  preserving the kinoinstrument pattern (kokoro-js throws at import time
-  in some environments).
+- **No implicit downloads.** `from_pretrained()` requires an injected engine
+  and never imports ONNX Runtime or downloads weights. The separate
+  `loadOrtWeb()` utility remains lazy for engine implementers.
 - **Text normalization is a JS subset, never silently skipped.** Numbers,
   dates, units, money, percent, fractions, ordinals are expanded;
   paralinguistic tags pass verbatim. This is NOT pynini FST parity — see
@@ -72,8 +101,8 @@ for await (const part of tts.stream(text)) { /* per-fragment audio */ }
   Speed is never silently dropped.
 - **Streaming is fragment-level, not token-level.** The vocoder runs on
   completed latents; `stream()` yields per-fragment audio.
-- **No fake audio.** `generate()` without an engine/weights throws
-  `ModelNotLoadedError`. Tests use an injected stub engine and are
+- **No fake audio.** `from_pretrained()` without an engine throws
+  `ModelNotLoadedError` immediately. Tests use an injected stub engine and are
   labeled as API/validation tests, not audio-quality tests.
 
 ## Voice cloning — consent notice

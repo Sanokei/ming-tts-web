@@ -1,5 +1,6 @@
 // Public surface of ming-tts-web. Lazy by design: importing this module
 // must NOT import onnxruntime-web (see sessions.loadOrtWeb).
+export {MING_RUNTIME_STATUS,mingReadiness} from './readiness.js';
 export { MingTTS, SAMPLING_RATE, MODEL_ID, SUPPORTED_LANGUAGES, resolveGeneratePlan } from './ming-tts.js';
 export type { GenerateOptions, GeneratePlan, FragmentEngine, FragmentResult, FromPretrainedOptions } from './ming-tts.js';
 export { listVoices, DEFAULT_VOICE, VOICE_REMAP, CLONING_CONSENT_NOTICE, resolveVoice } from './voices.js';

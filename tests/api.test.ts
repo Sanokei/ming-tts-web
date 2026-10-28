@@ -4,6 +4,7 @@ import { buildStructuredInstruction, buildTaskInstruction, buildTaskGenerationKw
 import { listVoices, DEFAULT_VOICE, VOICE_REMAP, resolveVoice, CLONING_CONSENT_NOTICE } from '../src/voices.ts';
 import { MingTTS, SAMPLING_RATE, resolveGeneratePlan, MODEL_ID } from '../src/ming-tts.ts';
 import { ModelNotLoadedError } from '../src/sessions.ts';
+import {mingReadiness} from '../src/readiness.ts';
 
 // Minimal tokenizer stub: encodes by word-splitting for ordinary text, but
 // returns the exact trained single id for every special token (as the real
@@ -172,9 +173,15 @@ describe('MingTTS API (mocked engine — tests API/validation, NOT audio quality
       MingTTS.from_pretrained('inclusionAI/Ming-3.0-tts-tiny', {}),
     ).rejects.toThrow(/0\.5B ONLY/);
   });
-  test('generate without an engine throws ModelNotLoadedError, never fake audio', async () => {
-    const tts = await MingTTS.from_pretrained(MODEL_ID, { device: 'wasm', dtype: 'int8' });
-    await expect(tts.generate('Hello.')).rejects.toBeInstanceOf(ModelNotLoadedError);
+  test('loading without an engine fails immediately, before a UI can claim ready', async () => {
+    await expect(MingTTS.from_pretrained(MODEL_ID, { device: 'wasm', dtype: 'int8' })).rejects.toBeInstanceOf(ModelNotLoadedError);
+  });
+  test('session factory alone is not synthesis readiness', async () => {
+    const sessionFactory={createSession:async()=>({run:async()=>({})})};
+    await expect(MingTTS.from_pretrained(MODEL_ID, { sessionFactory })).rejects.toThrow(/not sufficient/);
+    expect(mingReadiness().ready).toBe(false);
+    expect(mingReadiness({engine:sineEngine}).ready).toBe(true);
+    expect(mingReadiness({engine:sineEngine}).realSynthesisVerified).toBe(false);
   });
   test('generate returns non-silent 44100 Hz audio with reasonable duration', async () => {
     const tts = await MingTTS.from_pretrained(MODEL_ID, { device: 'wasm', dtype: 'int8', engine: sineEngine });
